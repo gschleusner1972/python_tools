@@ -2,7 +2,9 @@ import os
 from openpyxl import load_workbook
 from docx import Document
 
-BASE_DIR = "G:\\Git_2\\python_tools\\word_from_excel"
+# Determine the current directory and navigate to the root directory "python_tools\word_from_excel"
+CURRENT_DIR = os.path.abspath(os.getcwd())
+BASE_DIR = os.path.join(CURRENT_DIR.split("python_tools")[0], "python_tools", "word_from_excel")
 
 def replace_placeholder_with_value(doc, placeholder, value):
     """Replace all occurrences of a placeholder in a Word document with a given value."""
