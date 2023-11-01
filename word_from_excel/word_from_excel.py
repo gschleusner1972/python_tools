@@ -1,58 +1,62 @@
 import os
-from openpyxl import load_workbook
+import csv
 from docx import Document
 
-# Determine the current directory and navigate to the root directory "python_tools\word_from_excel"
-CURRENT_DIR = os.path.abspath(os.getcwd())
-BASE_DIR = os.path.join(CURRENT_DIR.split("python_tools")[0], "python_tools", "word_from_excel")
+BASE_DIR = "G:\\Git_2\\python_tools\\word_from_excel"
 
-def replace_placeholder_with_value(doc, placeholder, value):
-    """Replace all occurrences of a placeholder in a Word document with a given value."""
-    for paragraph in doc.paragraphs:
-        if placeholder in paragraph.text:
-            for run in paragraph.runs:
-                run.text = run.text.replace(placeholder, value)
-                
+def get_table_title(table):
+    """Retrieve the table title from the first cell."""
+    return table.cell(0, 0).text.strip().lower()
+
+def populate_table_in_doc(doc, name_value):
+    """Populate a table in the Word document with data from a CSV file."""
     for table in doc.tables:
-        for row in table.rows:
-            for cell in row.cells:
-                if placeholder in cell.text:
-                    for paragraph in cell.paragraphs:
-                        for run in paragraph.runs:
-                            run.text = run.text.replace(placeholder, value)
-                            
-    return doc
+        table_title = get_table_title(table)
+        if table_title:
+            table_file = f"{table_title}_{name_value}.csv"
+            file_path = os.path.join(BASE_DIR, table_file)
+            
+            if os.path.exists(file_path):
+                with open(file_path, 'r', encoding="utf-8") as csv_file:
+                    csv_reader = csv.reader(csv_file)
+                    next(csv_reader)  # skip header row
 
-def create_documents_from_template(excel_file, template_file, output_folder):
-    # Load the Excel workbook and select the active sheet
-    wb = load_workbook(excel_file)
-    ws = wb.active
-    
-    # Get headers from the first row to identify placeholders
-    headers = [cell.value for cell in ws[1]]
-    
-    # Ensure output folder exists
-    if not os.path.exists(output_folder):
-        os.makedirs(output_folder)
-    
-    # Iterate over each record in the Excel file (skipping the header)
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        doc = Document(template_file)
-        
-        # For each header, replace its corresponding placeholder with the value from the current row
-        for header, value in zip(headers, row):
-            replace_placeholder_with_value(doc, f"[[{header}]]", str(value))
-        
-        # Save the modified document in the output folder
-        output_filename = os.path.join(output_folder, f"output_{row[0]}.docx")
-        doc.save(output_filename)
+                    # Delete all rows in the table except the header
+                    while len(table.rows) > 1:
+                        row = table.rows[-1]
+                        row._element.get_or_add_tblPr().get_or_add_tblGrid().del_col()
 
-    print(f"Generated {ws.max_row - 1} documents in the '{output_folder}' directory.")
+                    # Populate the table with data from the CSV file
+                    for row_data in csv_reader:
+                        cells = table.add_row().cells
+                        for i, value in enumerate(row_data):
+                            cells[i].text = str(value)
+
+def generate_word_from_csv():
+    """Generate Word documents from CSV data."""
+    with open(os.path.join(BASE_DIR, "data.csv"), 'r', encoding="utf-8") as csv_file:
+        csv_reader = csv.reader(csv_file)
+        headers = next(csv_reader)
+
+        for row in csv_reader:
+            doc = Document(os.path.join(BASE_DIR, "template.docx"))
+            
+            # Replace placeholders in the document
+            for cell_value, header in zip(row, headers):
+                for paragraph in doc.paragraphs:
+                    paragraph.text = paragraph.text.replace(f"[[{header}]]", str(cell_value))
+        
+            # Get the 'name' value
+            name_index = headers.index('name')
+            name_value = row[name_index]
+
+            if name_value:
+                populate_table_in_doc(doc, name_value)
+        
+            output_dir = os.path.join(BASE_DIR, "output")
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            doc.save(os.path.join(output_dir, f"document_{name_value}.docx"))
 
 if __name__ == "__main__":
-    # Using the base directory for all paths
-    create_documents_from_template(
-        os.path.join(BASE_DIR, "data.xlsx"),
-        os.path.join(BASE_DIR, "template.docx"),
-        os.path.join(BASE_DIR, "output")
-    )
+    generate_word_from_csv()
